@@ -3,6 +3,7 @@ defmodule CommentPipeline.CommentAnalyzer do
   Analyze comments via indico.io
   """
   alias Experimental.GenStage
+  alias RpAPI.User
   use GenStage
 
   def start_link() do
@@ -13,6 +14,10 @@ defmodule CommentPipeline.CommentAnalyzer do
     {:consumer, :ok, subscribe_to: [CommentPipeline.CommentRetriever]}
   end
 
+  def handle_events([{from, [[]]}], _from, state) do
+    GenStage.reply(from, [])
+    {:noreply, [], state}
+  end
   def handle_events(events, _from, state) do
     [{from, events}] = events
     for event <- events do
@@ -30,11 +35,7 @@ defmodule CommentPipeline.CommentAnalyzer do
         {:ok, %HTTPoison.Response{body: body}} ->
           {:ok, body} = Poison.decode(body)
 
-          {:ok, json_result} =
-            merge_results(comments, body)
-            |> Poison.encode()
-
-          GenStage.reply(from, json_result)
+          GenStage.reply(from, merge_results(comments, body))
         {:error, _} -> IO.inspect {self(), "ERROR: bad response"}
       end
     end
@@ -52,9 +53,17 @@ defmodule CommentPipeline.CommentAnalyzer do
         {result, merged}
       end)
       |> elem(1)
-      |> Enum.into(%{}, fn({k, v}) ->
+      |> Enum.into([], fn({k, v}) ->
         length = Enum.count(v)
-        {k, Enum.reduce(v, 0, fn(x, acc) -> x + acc end) / length}
+        avg_sentiment =
+          Enum.reduce(v, 0, fn(x, acc) -> x + acc end) / length
+          |> Float.round(3)
+
+        %User{
+          login: k,
+          average_sentiment: avg_sentiment,
+          comment_count: length
+        }
       end)
   end
 end
