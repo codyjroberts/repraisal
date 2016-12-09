@@ -1,2 +1,2 @@
 use Mix.Config
-config :rp_api, cache_ttl: 300
+config :rp_api, cache_ttl: 10 # in seconds

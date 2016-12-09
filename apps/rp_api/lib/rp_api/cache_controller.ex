@@ -1,7 +1,8 @@
 defmodule RpAPI.CacheController do
   alias CommentPipeline.RepoRequester
-  alias RpAPI.{Cache, Repo, Project}
+  alias RpAPI.{Cache, Repo, Project, User}
   require Logger
+  import Ecto.Query
 
   def query(project, opts \\ []) do
     cache = Keyword.get(opts, :cache, Cache)
@@ -22,7 +23,7 @@ defmodule RpAPI.CacheController do
   defp cache_results(project, cache) do
     case Repo.get_by(Project, project) do
       nil -> persist_and_cache(project, cache)
-      struct -> persist_and_cache(struct, cache, [since: struct.last_accessed])
+      struct -> persist_and_cache(project, cache, [since: Ecto.DateTime.to_iso8601(struct.last_accessed)])
     end
   end
 
@@ -32,10 +33,18 @@ defmodule RpAPI.CacheController do
     RepoRequester.sync_notify(self(), Map.put(project, :since, since))
 
     receive do
-      {_, results} ->
-        expiry = :os.system_time(:seconds) + ttl()
-        :ets.insert(cache, {project, results, expiry})
+      {_, []} ->
+        case Repo.get_by(Project, project) do
+          nil -> Poison.encode(%{error: "no comments found"})
+          struct ->
+            users = Repo.all(from u in User, where: u.project_id == ^struct.id)
+            {:ok, resp} = Poison.encode(users)
 
+            expiry = :os.system_time(:seconds) + ttl()
+            :ets.insert(cache, {project, resp, expiry})
+            resp
+        end
+      {_, results} ->
         %{repo: repo, owner: owner} = project
 
         result =
@@ -44,11 +53,21 @@ defmodule RpAPI.CacheController do
           |> Repo.insert_or_update
 
         case result do
-          {:ok, struct}       -> struct
+          {:ok, struct} ->
+            struct
+            for u <- results do
+              Repo.insert! %{u | project_id: struct.id}
+            end
           {:error, changeset} -> Logger.warn "failed to insert"
         end
 
-        results
+        case Poison.encode(results) do
+          {:ok, resp} ->
+            expiry = :os.system_time(:seconds) + ttl()
+            :ets.insert(cache, {project, resp, expiry})
+            resp
+          _ -> Logger.warn "Encoding failure"
+        end
     after 10_000 ->
       "{\"error\": \"3rd party APIs are down\"}"
     end
