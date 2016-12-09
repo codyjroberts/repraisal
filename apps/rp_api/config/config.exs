@@ -29,3 +29,14 @@ use Mix.Config
 #
 #     import_config "#{Mix.env}.exs"
 import_config "#{Mix.env}.exs"
+
+config :rp_api, ecto_repos: [RpAPI.Repo]
+
+config :rp_api, RpAPI.Repo,
+  adapter: Ecto.Adapters.Postgres,
+  database: "ecto_simple",
+  username: "postgres",
+  password: "postgres",
+  template: "template0",
+  host: "localhost",
+  port: "5432"

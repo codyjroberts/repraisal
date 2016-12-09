@@ -18,7 +18,7 @@ defmodule RpAPI.Mixfile do
   #
   # Type "mix help compile.app" for more information
   def application do
-    [applications: [:logger, :cowboy, :plug],
+    [applications: [:logger, :cowboy, :plug, :postgrex, :ecto],
      mod: {RpAPI, []}]
   end
 
@@ -27,7 +27,9 @@ defmodule RpAPI.Mixfile do
     [
       {:cowboy, "~> 1.0.0"},
       {:plug, "~> 1.0"},
-      {:comment_pipeline, in_umbrella: true}
+      {:comment_pipeline, in_umbrella: true},
+      {:postgrex, ">= 0.0.0"},
+      {:ecto, "~> 2.0.0", override: true}
     ]
   end
 end

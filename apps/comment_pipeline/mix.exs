@@ -39,7 +39,7 @@ defmodule CommentPipeline.Mixfile do
     [
       {:gen_stage, "~> 0.9.0"},
       {:httpoison, "~> 0.10.0"},
-      {:poison, "~> 3.0.0"},
+      {:poison, "~> 2.0.0"},
       {:tentacat, "~> 0.5"}
     ]
   end
