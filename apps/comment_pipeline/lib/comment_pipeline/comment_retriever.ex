@@ -3,7 +3,6 @@ defmodule CommentPipeline.CommentRetriever do
   Fetches Repo's comments from Github
   """
 
-  alias CommentPipeline.Repo
   alias Experimental.GenStage
   use GenStage
 
@@ -22,8 +21,8 @@ defmodule CommentPipeline.CommentRetriever do
     {:noreply, [{from, events}], state}
   end
 
-  defp fetch_comments(%Repo{owner: owner, repo: repo}) do
+  defp fetch_comments(%{owner: owner, repo: repo, since: since}) do
     client = Tentacat.Client.new(%{access_token: System.get_env("GITHUB_TOKEN")})
-    Tentacat.Issues.Comments.filter_all(owner, repo, [since: "2016-12-06T23:59:59Z"], client)
+    Tentacat.Issues.Comments.filter_all(owner, repo, [since: since], client)
   end
 end

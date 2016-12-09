@@ -1,6 +1,6 @@
 defmodule RpAPI.Router do
   use Plug.Router
-  alias CommentPipeline.{RepoRequester, Repo}
+  alias CommentPipeline.RepoRequester
   alias RpAPI.CacheController
 
   if Mix.env == :dev do
@@ -16,7 +16,7 @@ defmodule RpAPI.Router do
     conn = fetch_query_params(conn)
     %{ "owner" => owner, "repo" => repo } = conn.params
 
-    {_, resp} = CacheController.query(%Repo{owner: owner, repo: repo})
+    {_, resp} = CacheController.query(%{owner: owner, repo: repo})
 
     conn
     |> put_resp_content_type("application/json")
