@@ -30,25 +30,9 @@ defmodule CommentPipeline.CommentAnalyzer do
         {:ok, %HTTPoison.Response{body: body}} ->
           {:ok, body} = Poison.decode(body)
 
-          results =
-            body
-            |> Map.get("results")
-            |> Enum.zip(comments)
-
-          reduced =
-            Enum.map_reduce(results, %{}, fn(x, acc) ->
-              {r, {c, u}} = x
-
-              result = %{u => [r]}
-
-              merged = Map.merge(acc, result, fn(k, v1, v2) -> v1 ++ v2 end)
-
-              {result, merged}
-            end)
-
-          {_, final} = reduced
-
-          {:ok, json_result} = Poison.encode(final)
+          {:ok, json_result} =
+            merge_results(comments, body)
+            |> Poison.encode()
 
           GenStage.reply(from, json_result)
         {:error, _} -> IO.inspect {self(), "ERROR: bad response"}
@@ -56,6 +40,22 @@ defmodule CommentPipeline.CommentAnalyzer do
     end
 
     {:noreply, [], state}
+  end
+
+  defp merge_results(comments, body) do
+      body
+      |> Map.get("results")
+      |> Enum.zip(comments)
+      |> Enum.map_reduce(%{}, fn({r, {c, u}}, acc) ->
+        result = %{u => [r]}
+        merged = Map.merge(acc, result, fn(k, v1, v2) -> v1 ++ v2 end)
+        {result, merged}
+      end)
+      |> elem(1)
+      |> Enum.into(%{}, fn({k, v}) ->
+        length = Enum.count(v)
+        {k, Enum.reduce(v, 0, fn(x, acc) -> x + acc end) / length}
+      end)
   end
 end
 
