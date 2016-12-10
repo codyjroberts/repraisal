@@ -3,14 +3,13 @@ defmodule CommentPipelineTest do
   doctest CommentPipeline
 
   alias CommentPipeline.{CommentRetriever, RepoRequester}
-  alias Experimental.GenStage
 
   @params %{owner: "elixir-lang", repo: "elixir", since: "2016-12-07T23:59:59Z"}
 
   describe "RepoRequester" do
     test "emits repo" do
       {:ok, rr} = RepoRequester.start_link()
-      {:ok, f} = Forwarder.start_link({:consumer, self(), subscribe_to: [rr]})
+      {:ok, _} = Forwarder.start_link({:consumer, self(), subscribe_to: [rr]})
       assert_receive {:consumer_subscribed, _}
 
       RepoRequester.sync_notify(self(), @params)
@@ -23,7 +22,7 @@ defmodule CommentPipelineTest do
   describe "CommentRetriever" do
     @tag :skip # Avoid unnecessary API calls
     test "fetches comments" do
-      {:ok, rr} = RepoRequester.start_link()
+      {:ok, _} = RepoRequester.start_link()
       {:ok, cr} = CommentRetriever.start_link(self())
       {:ok, _} = Forwarder.start_link({:consumer, self(), subscribe_to: [cr]})
       assert_receive {:consumer_subscribed, _}
