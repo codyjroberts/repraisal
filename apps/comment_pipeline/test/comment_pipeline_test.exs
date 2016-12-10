@@ -5,7 +5,7 @@ defmodule CommentPipelineTest do
   alias CommentPipeline.{CommentRetriever, RepoRequester}
   alias Experimental.GenStage
 
-  @params %{owner: "elixir-lang", repo: "elixir"}
+  @params %{owner: "elixir-lang", repo: "elixir", since: "2016-12-07T23:59:59Z"}
 
   describe "RepoRequester" do
     test "emits repo" do

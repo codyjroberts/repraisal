@@ -1,8 +1,8 @@
-defmodule RpAPI.Mixfile do
+defmodule DB.Mixfile do
   use Mix.Project
 
   def project do
-    [app: :rp_api,
+    [app: :db,
      version: "0.1.0",
      build_path: "../../_build",
      config_path: "../../config/config.exs",
@@ -14,21 +14,16 @@ defmodule RpAPI.Mixfile do
      deps: deps]
   end
 
-  # Configuration for the OTP application
-  #
-  # Type "mix help compile.app" for more information
   def application do
-    [applications: [:logger, :cowboy, :plug],
-     mod: {RpAPI, []}]
+    [applications: [:logger, :postgrex, :ecto],
+     mod: {DB, []}]
   end
 
-  # Dependencies can be Hex packages:
   defp deps do
     [
-      {:cowboy, "~> 1.0.0"},
-      {:plug, "~> 1.0"},
-      {:comment_pipeline, in_umbrella: true},
-      {:db, in_umbrella: true}
+      {:postgrex, ">= 0.0.0"},
+      {:poison, "~> 2.0.0"},
+      {:ecto, "~> 2.0.0"}
     ]
   end
 end

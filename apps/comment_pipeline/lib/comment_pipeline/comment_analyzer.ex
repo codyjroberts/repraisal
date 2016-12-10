@@ -3,7 +3,7 @@ defmodule CommentPipeline.CommentAnalyzer do
   Analyze comments via indico.io
   """
   alias Experimental.GenStage
-  alias RpAPI.User
+  alias DB.User
   use GenStage
 
   def start_link() do

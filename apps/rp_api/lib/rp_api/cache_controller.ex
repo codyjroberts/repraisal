@@ -1,6 +1,7 @@
 defmodule RpAPI.CacheController do
   alias CommentPipeline.RepoRequester
-  alias RpAPI.{Cache, Repo, Project, User}
+  alias DB.{Repo, Project, User}
+  alias RpAPI.Cache
   require Logger
 
   @timeout 10_000 # 10 seconds
@@ -24,13 +25,13 @@ defmodule RpAPI.CacheController do
   defp cache_results(project, cache) do
     case Repo.get_by(Project, project) do
       nil -> persist_and_cache(project, cache)
-      struct ->
-        last_accessed = "#{Ecto.DateTime.to_iso8601(struct.last_accessed)}Z"
+      p ->
+        last_accessed = Project.last_accessed(p.id)
         Task.async(fn -> persist_and_cache(project, cache, [since: last_accessed]) end)
 
-        struct.id
-        |> Project.users
-        |> encode(project)
+        p
+        |> Repo.preload(:users)
+        |> encode(project, cache)
     end
   end
 
@@ -42,34 +43,26 @@ defmodule RpAPI.CacheController do
       {_, []} ->
         case Repo.get_by(Project, project) do
           nil -> json_error("no results")
-          struct ->
-            struct.id
-            |> Project.users
+          p ->
+            p
+            |> Repo.preload(:users)
             |> encode(project, cache)
         end
 
       {_, results} ->
-        %{repo: repo, owner: owner} = project
-
-        result =
-          case Repo.get_by(Project, project) do
-            nil -> %Project{owner: owner, repo: repo}
-            p -> p
-          end
-          |> Ecto.Changeset.change(%{last_accessed: Ecto.DateTime.utc})
-          |> Repo.insert_or_update
-
-        case result do
+        case Project.insert_or_update(project) do
           {:ok, p} ->
             for old_user <- results do
               User
               |> Repo.get_by(%{login: old_user.login, project_id: p.id})
               |> User.update_average(old_user, p.id)
             end
-          {:error, changeset} -> Logger.warn "failed to insert project #{IO.inspect(changeset)}"
-        end
 
-        encode(project, results, cache)
+            p
+            |> Repo.preload(:users)
+            |> encode(project, cache)
+          {:error, changeset} -> Logger.error inspect(changeset)
+        end
     after @timeout ->
       json_error("3rd party APIs are down")
     end
