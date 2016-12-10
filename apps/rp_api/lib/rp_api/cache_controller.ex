@@ -23,42 +23,71 @@ defmodule RpAPI.CacheController do
   defp cache_results(project, cache) do
     case Repo.get_by(Project, project) do
       nil -> persist_and_cache(project, cache)
-      struct -> persist_and_cache(project, cache, [since: Ecto.DateTime.to_iso8601(struct.last_accessed)])
+      struct ->
+        Task.async(fn -> persist_and_cache(project, cache, [since: "#{Ecto.DateTime.to_iso8601(struct.last_accessed)}Z"]) end)
+        users = Repo.all(from u in User, where: u.project_id == ^struct.id)
+        case Poison.encode(users) do
+          {:ok, resp} ->
+            expiry = :os.system_time(:seconds) + ttl()
+            :ets.insert(cache, {project, resp, expiry})
+            resp
+          _ ->
+            {:ok, resp} = Poison.encode(%{error: "no comments found"})
+            resp
+        end
     end
   end
 
   defp persist_and_cache(project, cache, opts \\ []) do
     since = Keyword.get(opts, :since, "2016-12-06T23:59:59Z")
-
     RepoRequester.sync_notify(self(), Map.put(project, :since, since))
 
     receive do
       {_, []} ->
         case Repo.get_by(Project, project) do
-          nil -> Poison.encode(%{error: "no comments found"})
+          nil ->
+            {:ok, resp} = Poison.encode(%{error: "no comments found"})
+            resp
           struct ->
             users = Repo.all(from u in User, where: u.project_id == ^struct.id)
-            {:ok, resp} = Poison.encode(users)
-
-            expiry = :os.system_time(:seconds) + ttl()
-            :ets.insert(cache, {project, resp, expiry})
-            resp
+            case Poison.encode(users) do
+              {:ok, resp} ->
+                expiry = :os.system_time(:seconds) + ttl()
+                :ets.insert(cache, {project, resp, expiry})
+                resp
+              _ ->
+                {:ok, resp} = Poison.encode(%{error: "no comments found"})
+                resp
+            end
         end
+
       {_, results} ->
         %{repo: repo, owner: owner} = project
 
         result =
-          %Project{owner: owner, repo: repo}
+          case Repo.get_by(Project, project) do
+            nil -> %Project{owner: owner, repo: repo}
+            p -> p
+          end
           |> Ecto.Changeset.change(%{last_accessed: Ecto.DateTime.utc})
           |> Repo.insert_or_update
 
         case result do
-          {:ok, struct} ->
-            struct
+          {:ok, p} ->
             for u <- results do
-              Repo.insert! %{u | project_id: struct.id}
+              case Repo.get_by(User, %{login: u.login}) do
+            nil -> Repo.insert! %{u | project_id: p.id}
+            struct ->
+              struct
+              |> Ecto.Changeset.change(%{
+                   project_id: p.id,
+                   comment_count: struct.comment_count + u.comment_count,
+                   average_sentiment: ((struct.comment_count * struct.average_sentiment) + u.average_sentiment) / (struct.comment_count + u.comment_count)
+              })
+              |> Repo.update
+              end
             end
-          {:error, changeset} -> Logger.warn "failed to insert"
+          {:error, changeset} -> Logger.warn "failed to insert project"
         end
 
         case Poison.encode(results) do
