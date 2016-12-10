@@ -44,6 +44,8 @@ defmodule RpAPI.CacheController do
         case Repo.get_by(Project, project) do
           nil -> json_error("no results")
           p ->
+            Project.update_sentiment(p.id)
+
             p
             |> Repo.preload(:users)
             |> encode(project, cache)
@@ -57,6 +59,8 @@ defmodule RpAPI.CacheController do
               |> Repo.get_by(%{login: old_user.login, project_id: p.id})
               |> User.update_average(old_user, p.id)
             end
+
+            Project.update_sentiment(p.id)
 
             p
             |> Repo.preload(:users)
