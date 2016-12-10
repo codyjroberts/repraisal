@@ -9,7 +9,9 @@ defmodule RpAPI.CacheController do
   def query(project, opts \\ []) do
     cache = Keyword.get(opts, :cache, Cache)
     case lookup(project, cache) do
-      {:found, result} -> {:cached, result}
+      {:found, result} ->
+        Task.async(fn -> cache_results(project, cache) end)
+        {:cached, result}
       _ -> {:fresh, cache_results(project, cache)}
     end
   end
@@ -88,8 +90,9 @@ defmodule RpAPI.CacheController do
     response
   end
 
-  defp json_error(reason), do: Poison.encode(%{error: reason}) |> elem(1)
+
   defp expired?(result, exp, t) when t < exp, do: {:found, result}
+  defp json_error(reason), do: Poison.encode(%{error: reason}) |> elem(1)
   defp expired?(_, _, _), do: nil
   defp ttl, do: Application.get_env(:rp_api, :cache_ttl)
 end
