@@ -1,5 +1,6 @@
 defmodule RpAPI.User do
   use Ecto.Schema
+  alias RpAPI.Repo
 
   schema "user" do
     field :login, :string
@@ -8,6 +9,28 @@ defmodule RpAPI.User do
     belongs_to :project, RpAPI.Project
 
     timestamps
+  end
+
+  def update_average(nil, user, project_id) do
+    Repo.insert! %{user | project_id: project_id}
+  end
+  def update_average(query, user, project_id) do
+    changes = %{
+      project_id: project_id,
+      comment_count: query.comment_count + user.comment_count,
+      average_sentiment: recalculate_sentiment(query.comment_count,
+                                               user.comment_count,
+                                               query.average_sentiment,
+                                               user.average_sentiment)
+    }
+
+    query
+    |> Ecto.Changeset.change(changes)
+    |> Repo.update
+  end
+
+  defp recalculate_sentiment(oldc, newc, oldsent, newsent) do
+    ((oldc * oldsent) + newsent) / (oldc + newc)
   end
 end
 
