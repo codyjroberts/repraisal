@@ -67,4 +67,3 @@ defmodule CommentPipeline.CommentAnalyzer do
       end)
   end
 end
-
