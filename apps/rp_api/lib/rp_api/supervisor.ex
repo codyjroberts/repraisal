@@ -11,8 +11,7 @@ defmodule RpAPI.Supervisor do
 
     # Define workers and child supervisors to be supervised
     children = [
-      Plug.Adapters.Cowboy.child_spec(:http, RpAPI.Router, [], [port: 8080]),
-      worker(RpAPI.Repo, [])
+      Plug.Adapters.Cowboy.child_spec(:http, RpAPI.Router, [], [port: 8080])
     ]
 
     # See http://elixir-lang.org/docs/stable/elixir/Supervisor.html

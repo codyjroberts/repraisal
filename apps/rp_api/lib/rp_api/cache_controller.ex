@@ -1,8 +1,10 @@
 defmodule RpAPI.CacheController do
   alias CommentPipeline.RepoRequester
-  alias RpAPI.{Cache, Repo, Project, User}
+  alias DB.{Repo, Project, User}
+  alias RpAPI.Cache
   require Logger
-  import Ecto.Query
+
+  @timeout 10_000 # 10 seconds
 
   def query(project, opts \\ []) do
     cache = Keyword.get(opts, :cache, Cache)
@@ -23,18 +25,13 @@ defmodule RpAPI.CacheController do
   defp cache_results(project, cache) do
     case Repo.get_by(Project, project) do
       nil -> persist_and_cache(project, cache)
-      struct ->
-        Task.async(fn -> persist_and_cache(project, cache, [since: "#{Ecto.DateTime.to_iso8601(struct.last_accessed)}Z"]) end)
-        users = Repo.all(from u in User, where: u.project_id == ^struct.id)
-        case Poison.encode(users) do
-          {:ok, resp} ->
-            expiry = :os.system_time(:seconds) + ttl()
-            :ets.insert(cache, {project, resp, expiry})
-            resp
-          _ ->
-            {:ok, resp} = Poison.encode(%{error: "no comments found"})
-            resp
-        end
+      p ->
+        last_accessed = Project.last_accessed(p.id)
+        Task.async(fn -> persist_and_cache(project, cache, [since: last_accessed]) end)
+
+        p
+        |> Repo.preload(:users)
+        |> encode(project, cache)
     end
   end
 
@@ -45,63 +42,49 @@ defmodule RpAPI.CacheController do
     receive do
       {_, []} ->
         case Repo.get_by(Project, project) do
-          nil ->
-            {:ok, resp} = Poison.encode(%{error: "no comments found"})
-            resp
-          struct ->
-            users = Repo.all(from u in User, where: u.project_id == ^struct.id)
-            case Poison.encode(users) do
-              {:ok, resp} ->
-                expiry = :os.system_time(:seconds) + ttl()
-                :ets.insert(cache, {project, resp, expiry})
-                resp
-              _ ->
-                {:ok, resp} = Poison.encode(%{error: "no comments found"})
-                resp
-            end
+          nil -> json_error("no results")
+          p ->
+            p
+            |> Repo.preload(:users)
+            |> encode(project, cache)
         end
 
       {_, results} ->
-        %{repo: repo, owner: owner} = project
-
-        result =
-          case Repo.get_by(Project, project) do
-            nil -> %Project{owner: owner, repo: repo}
-            p -> p
-          end
-          |> Ecto.Changeset.change(%{last_accessed: Ecto.DateTime.utc})
-          |> Repo.insert_or_update
-
-        case result do
+        case Project.insert_or_update(project) do
           {:ok, p} ->
-            for u <- results do
-              case Repo.get_by(User, %{login: u.login}) do
-            nil -> Repo.insert! %{u | project_id: p.id}
-            struct ->
-              struct
-              |> Ecto.Changeset.change(%{
-                   project_id: p.id,
-                   comment_count: struct.comment_count + u.comment_count,
-                   average_sentiment: ((struct.comment_count * struct.average_sentiment) + u.average_sentiment) / (struct.comment_count + u.comment_count)
-              })
-              |> Repo.update
-              end
+            for old_user <- results do
+              User
+              |> Repo.get_by(%{login: old_user.login, project_id: p.id})
+              |> User.update_average(old_user, p.id)
             end
-          {:error, changeset} -> Logger.warn "failed to insert project"
-        end
 
-        case Poison.encode(results) do
-          {:ok, resp} ->
-            expiry = :os.system_time(:seconds) + ttl()
-            :ets.insert(cache, {project, resp, expiry})
-            resp
-          _ -> Logger.warn "Encoding failure"
+            p
+            |> Repo.preload(:users)
+            |> encode(project, cache)
+          {:error, changeset} -> Logger.error inspect(changeset)
         end
-    after 10_000 ->
-      "{\"error\": \"3rd party APIs are down\"}"
+    after @timeout ->
+      json_error("3rd party APIs are down")
     end
   end
 
+  defp encode(results, project, cache \\ nil) do
+    case Poison.encode(results) do
+      {:ok, resp} ->
+        if cache, do: update_cache(project, resp, cache), else: resp
+      _ ->
+        Logger.warn "Encoding failure"
+        json_error("no results")
+    end
+  end
+
+  defp update_cache(project, response, cache) do
+    expiry = :os.system_time(:seconds) + ttl()
+    :ets.insert(cache, {project, response, expiry})
+    response
+  end
+
+  defp json_error(reason), do: Poison.encode(%{error: reason}) |> elem(1)
   defp expired?(result, exp, t) when t < exp, do: {:found, result}
   defp expired?(_, _, _), do: nil
   defp ttl, do: Application.get_env(:rp_api, :cache_ttl)

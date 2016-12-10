@@ -10,11 +10,11 @@ use Mix.Config
 
 # You can configure for your application as:
 #
-#     config :rp_api, key: :value
+#     config :db, key: :value
 #
 # And access this configuration in your application as:
 #
-#     Application.get_env(:rp_api, :key)
+#     Application.get_env(:db, :key)
 #
 # Or configure a 3rd-party app:
 #
@@ -28,4 +28,13 @@ use Mix.Config
 # here (which is why it is important to import them last).
 #
 #     import_config "#{Mix.env}.exs"
-import_config "#{Mix.env}.exs"
+config :db, ecto_repos: [DB.Repo]
+
+config :db, DB.Repo,
+  adapter: Ecto.Adapters.Postgres,
+  database: "ecto_simple",
+  username: "postgres",
+  password: "postgres",
+  template: "template0",
+  host: "localhost",
+  port: "5432"

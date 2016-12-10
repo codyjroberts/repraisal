@@ -1,6 +1,6 @@
 defmodule RpAPI.CacheControllerTest do
   use ExUnit.Case, async: true
-  alias CommentPipeline.{RepoRequester, CommentRetriever, CommentAnalyzer, Repo}
+  alias CommentPipeline.{RepoRequester, CommentRetriever, CommentAnalyzer}
   alias RpAPI.CacheController
 
   setup do
@@ -9,7 +9,7 @@ defmodule RpAPI.CacheControllerTest do
     CommentAnalyzer.start_link()
 
     table = :ets.new(:testcache, [:set, :public, :named_table])
-    repo = %Repo{owner: "elixir-lang", repo: "elixir"}
+    repo = %{owner: "elixir-lang", repo: "elixir"}
 
     [table: table, repo: repo]
   end
