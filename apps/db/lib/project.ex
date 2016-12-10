@@ -2,12 +2,13 @@ defmodule DB.Project do
   use Ecto.Schema
   import Ecto.Query
   alias DB.{User, Repo, Project}
-  @derive {Poison.Encoder, only: [:owner, :repo, :users]}
+  @derive {Poison.Encoder, only: [:owner, :repo, :user_sentiment, :users]}
 
   schema "project" do
     field :owner, :string
     field :repo, :string
     field :last_accessed, Ecto.DateTime
+    field :user_sentiment, :float
     has_many :users, User
 
     timestamps
@@ -32,6 +33,15 @@ defmodule DB.Project do
       p -> p
     end
     |> Ecto.Changeset.change(%{last_accessed: Ecto.DateTime.utc})
+    |> Repo.insert_or_update
+  end
+
+  def update_sentiment(project_id) do
+    query = from u in User, where: u.project_id == ^project_id
+    sentiment = Repo.aggregate(query, :avg, :average_sentiment)
+
+    Repo.get!(Project, project_id)
+    |> Ecto.Changeset.change(%{user_sentiment: sentiment})
     |> Repo.insert_or_update
   end
 end
