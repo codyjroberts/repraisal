@@ -1,5 +1,5 @@
 # Description
-Repraisal is an experiement with Elixir's experimental GenStage.  It uses GenStage
+Repraisal is an experiment with Elixir's experimental GenStage.  It uses GenStage
 to fetch comments on a particular repository, aggregate them by user, and batch process
 them for sentiment analysis using Indico's mighty fine API.  The implementation is currently
 a bit rough and doesn't take full advantage of GenStage's abilities.
