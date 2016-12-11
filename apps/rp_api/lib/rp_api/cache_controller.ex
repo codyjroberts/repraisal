@@ -12,7 +12,7 @@ defmodule RpAPI.CacheController do
       {:found, result} ->
         Task.async(fn -> cache_results(project, cache) end)
         {:cached, result}
-      _ -> {:fresh, cache_results(project, cache)}
+      _ -> {:fresh, cache_results(project, cache, opts)}
     end
   end
 
@@ -24,9 +24,10 @@ defmodule RpAPI.CacheController do
     end
   end
 
-  defp cache_results(project, cache) do
+  defp cache_results(project, cache, opts \\ []) do
     case Repo.get_by(Project, project) do
-      nil -> persist_and_cache(project, cache)
+      nil ->
+        persist_and_cache(project, cache, opts)
       p ->
         last_accessed = Project.last_accessed(p.id)
         Task.async(fn -> persist_and_cache(project, cache, [since: last_accessed]) end)
