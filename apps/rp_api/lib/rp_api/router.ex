@@ -12,11 +12,11 @@ defmodule RpAPI.Router do
   plug :dispatch
 
 
-  get "/repo" do
+  get "/comment_analysis/:owner/:repo" do
     conn = fetch_query_params(conn)
-    %{ "owner" => owner, "repo" => repo } = conn.params
 
-    {_, resp} = CacheController.query(%{owner: owner, repo: repo})
+    {_, resp} = CacheController.query(%{owner: owner, repo: repo},
+                                      Enum.to_list(conn.params))
 
     conn
     |> put_resp_content_type("application/json")
